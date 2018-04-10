@@ -5,3 +5,42 @@
     - include: tasks/deps.yml
 
     # your code goes here ...
+
+    - name: "Setup | Install NGINX and runit Packages"
+      yum:
+        name: "{{ item }}"
+        state: present
+      with_items:
+        - nginx
+        - https://packagecloud.io/imeyer/runit/packages/el/6/runit-2.1.2-1.el6.x86_64.rpm/download.rpm
+
+    - name: "Config | Copy nginx and ssl files"
+      copy: src={{ item.src }} dest={{ item.dest }} owner={{ item.owner }} group={{ item.group }} mode={{ item.mode }} backup=yes
+      with_items:
+       - { src: 'config/nginx.conf' , dest: '/etc/nginx/nginx.conf' , owner: 'nginx' , group: 'nginx' , mode: '0644' }
+       - { src: 'files/self-signed.crt' , dest: '/etc/ssl/certs/self-signed.crt' , owner: 'root' , group: 'root' , mode: '0600' }
+       - { src: 'files/self-signed.key' , dest: '/etc/ssl/certs/self-signed.key' , owner: 'root' , group: 'root' , mode: '0600' }
+      register: nginx_config
+
+    - name: "Config | untar application.zip to /opt"
+      unarchive:
+        src: application.zip
+        dest: /opt/
+
+    - name: "Config | Ensure presence of application in /etc/service"
+      file:
+        path: /etc/service/application
+        state: directory
+
+    - name: "Config | Set application link for runit"
+      file:
+        src: /opt/application/run
+        dest: /etc/service/application/run
+        state: link
+
+    - name: "Svc | NGINX | Start and Enable"
+      service:
+        name: nginx
+        state: restarted
+        enabled: yes
+      when: nginx_config.changed
